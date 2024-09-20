@@ -1,0 +1,123 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using NXOpen;
+using NXOpen.Assemblies;
+using Newtonsoft.Json; 
+
+namespace FindingPartFilePathFromCS
+{
+    public class MyClass
+    {
+        // Declare NXOpen session variables
+        public static Session theSession = null;
+
+        public static void Main(string[] args)
+        {
+            try
+            {
+                // Step 1: Initialize NXOpen session
+                Console.WriteLine("Initializing NXOpen session...");
+                theSession = Session.GetSession();
+
+                // Option 1: Hard-code the assembly file path
+                string assemblyFilePath = @"C:\Users\dverma7\cy4Assembly\my_assembly1.prt"; // Update this path
+
+                // Step 2: Open the assembly file (.prt) using only NXOpen API
+                PartLoadStatus loadStatus;
+                BasePart basePart = theSession.Parts.OpenBaseDisplay(assemblyFilePath, out loadStatus);
+
+                if (basePart is Part)
+                {
+                    Part assemblyPart = (Part)basePart;
+                    Console.WriteLine($"Opened Assembly: {assemblyPart.FullPath}");
+
+                    // Step 3: Get the root component of the assembly
+                    Component rootComponent = assemblyPart.ComponentAssembly.RootComponent;
+
+                    // Step 4: Recursively find and store the file paths of all parts in the assembly
+                    var partFilePaths = new List<string>();
+                    GetPartFilePaths(rootComponent, partFilePaths);
+
+                    // Step 5: Serialize part file paths to JSON
+                    string jsonOutput = SerializePartFilePathsToJson(partFilePaths);
+
+                    // Step 6: Save JSON to a file
+                    string jsonFilePath = @"C:\Users\dverma7\MyParts\new_NXPartFilePaths.json"; // Update this path
+                    SaveJsonToFile(jsonOutput, jsonFilePath);
+
+                    Console.WriteLine($"Part file paths saved to {jsonFilePath}");
+                }
+                else
+                {
+                    Console.WriteLine("Error: Could not open the assembly as a valid part file.");
+                }
+
+                loadStatus.Dispose();
+            }
+            catch (NXException ex)
+            {
+                Console.WriteLine($"NX Exception: {ex.Message}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Unexpected error: {ex.Message}");
+            }
+        }
+
+        // Step 4: Recursive function to get part file paths from assembly components
+        static void GetPartFilePaths(Component component, List<string> partFilePaths)
+        {
+            try
+            {
+                // Get the part file path of the component
+                Part part = component.Prototype as Part;
+                if (part != null)
+                {
+                    string filePath = part.FullPath;
+                    partFilePaths.Add(filePath);
+                    Console.WriteLine($"Found part: {component.DisplayName}, File Path: {filePath}");
+                }
+
+                // Recursively process subcomponents (if any)
+                foreach (Component childComponent in component.GetChildren())
+                {
+                    GetPartFilePaths(childComponent, partFilePaths);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error processing component {component.DisplayName}: {ex.Message}");
+            }
+        }
+
+        // Step 5: Serialize the list of part file paths to JSON format
+        static string SerializePartFilePathsToJson(List<string> partFilePaths)
+        {
+            try
+            {
+                // Serialize the list of file paths to JSON format
+                return JsonConvert.SerializeObject(partFilePaths, Formatting.Indented);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error serializing part file paths to JSON: {ex.Message}");
+                return string.Empty;
+            }
+        }
+
+        // Step 6: Save the JSON output to a file
+        static void SaveJsonToFile(string jsonOutput, string filePath)
+        {
+            try
+            {
+                // Write the JSON string to a file
+                File.WriteAllText(filePath, jsonOutput);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error saving JSON to file: {ex.Message}");
+            }
+        }
+    }
+}
